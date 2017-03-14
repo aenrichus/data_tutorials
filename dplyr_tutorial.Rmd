@@ -1,0 +1,175 @@
+---
+title: "Dealing with Data in dplyr"
+author: "Henry Wolf VII"
+date: "22 March 2017"
+output: html_document
+---
+
+The first we need to install and load the packages. You can install packages in R Studio by going to *Tools -> Install Packages...* in the menu bar. You can also install them in code (see below).
+
+```{r}
+# install.packages("dplyr")
+library(dplyr)
+
+```
+
+Great. Now we have dplyr loaded. Now what, you ask? Let's load some data.
+
+```{r}
+# read in the data files
+lex_data <- read.delim("lexical_decision.txt", sep = " ")
+
+# convert data to a tbl class (which is easier to read)
+lex_data <- tbl_df(lex_data)
+
+# view a snapshot of the data
+glimpse(lex_data)
+
+```
+
+Yikes! This is all a bit much for me to work with. Sure, I made the Eprime file, so I know what the columns are supposed to be, but those headers just aren't intuitive. Let's fix that (and get rid of the useless columns, too).
+
+```{r}
+# change the column names (to something more useful)
+colnames(lex_data) <- c("V1","id","V2","V3","V4","V5","V6","V7","date","V8","V9","V10","V11","imageability","key","V12","V13","trialorder","V15","V16","V17","procedure","V18","V19","stimulus","type","V20","V21","V22","V23","V24","response","rt","V25","V26","V27","V28","V29","V30","V31","V32","V33","wordlikeness","V34")
+
+# select the important columns (in the order that we want them)
+lex_data <- select(lex_data, id, date, imageability, key, procedure, stimulus, type, response, rt, wordlikeness, trialorder)
+
+```
+
+Now would be a good time to take another look at the data using the glimpse function. I'll wait... Isn't that a lot more manageable? I'll take your look of astonishment as an affirmative. Anyway, we have a lot of practice items and breaks that should be filtered out of the data before any analyses. Let's do that now.
+
+```{r}
+# filter for only the experimental rows (remove practices + breaks)
+lex_data <- filter(lex_data, procedure == "AuthorProc")
+
+```
+
+Cool. Did you glipse the data? Did you see the problem? The stimuli are factors and we are going to need them to be character strings. Fear not, fixing that is easy peasy lemon... I'm done.
+
+```{r}
+# convert the stimulus column to character strings
+lex_data$stimulus <- as.character(lex_data$stimulus)
+
+```
+
+Exhausting, I know. Here's the thing: A lot of the data needs to be manipulated before I can analyze it. I need accuracy information. Reaction times need to be log transformed. Trial order needs to be standardized. One of our stimuli was literally the word "NULL". R doesn't like that, so we need to make it something else (like "NADA"). You know how it is. Time to mutate. Cowabunga! 
+
+```{r}
+# create an accuracy column by comparing the key and response
+lex_data <- mutate(lex_data, accuracy = ifelse(key == response, 1, 0))
+
+# create an error column (reversed accuracy without the NAs)
+lex_data <- mutate(lex_data, error = ifelse(is.na(accuracy), 1, ifelse(accuracy == 0, 1, 0)))
+
+# replace RTs of less than 250ms with NA (because inhuman speed)
+lex_data$rt <- ifelse(lex_data$rt < 250, NA, lex_data$rt)
+
+# create a correct_rt column with only correct trial RTs (because science)
+lex_data <- lex_data %>% mutate(correct_rt = ifelse(error == 1, NA, rt))
+
+# create a log_rt column
+lex_data <- mutate(lex_data, log_rt = log(correct_rt))
+
+# standardize the trial order and prt
+lex_data$trialorder <- scale(lex_data$trialorder)
+
+# fix the missing stimulus
+lex_data$stimulus[lex_data$stimulus == ""] <- "NADA"
+
+```
+
+Now that you've learned the secret of the ooze, take another glimpse of the data. That looks better, amirite? Sadly, we have some new columns making the old ones unnecessary. Here comes the select function again to save the day.
+
+```{r}
+# select (and rename and reorder) the important columns
+lex_data <- select(lex_data, id, rt = log_rt, err = error, stim = stimulus, type, img = imageability, word = wordlikeness, order = trialorder)
+
+glimpse(lex_data)
+
+```
+
+Isn't it glorious? Almost. We need to fix those a couple more data structures. (But seriously, we are almost to the fun part, I promise. Oh, you thought this was the fun part? Well, in that case, we are kindred spirits, friend.)
+
+```{r}
+# change variables to more useful types
+lex_data$id <- as.factor(lex_data$id)
+lex_data$err <- as.integer(lex_data$err)
+
+```
+
+Since we converted to a tbl data structure, we can see the head information just by typing the name of the data frame (lex_data) into the console. Try it. It's like glimpse, but wider!
+
+Okay, now that the data is in a nice and neat format, let's dive into that data! How about getting the means of all of the columns. Oh boy, I wonder what will happen.
+
+```{r}
+# summarize each column to get means
+summarise_each(lex_data, funs(mean))
+
+```
+
+Well, I can see the mean error rate is just about seven percent and that the mean of order is zero because we standardized it. But what happened to the other columns? Factors and character strings have no means, but RT should have one, right? Yes, it should. But there are lots of NA values that screw everything up. Let's take a closer look at that column while smoking our pipe (%>%).
+
+```{r}
+# take the lex_data, filter out rows where RT is NA, take the mean of RT
+lex_data %>% filter(!is.na(rt)) %>% summarise(mean(rt))
+
+```
+
+That's better, but "what if I want a separate mean RT for each participant?" you ask? Behold!
+
+```{r}
+# group_by Subject id to get individual mean RTs
+lex_data %>% filter(!is.na(rt)) %>% group_by(id) %>% summarise(mean(rt))
+
+# we can do it for error rates, too
+lex_data %>% group_by(id) %>% summarise(mean(err))
+
+```
+
+What about those manipulations in our data? Those seem important, right? Yo, I'll tell you what I want. What I really, really want. I wanna, really really really wanna determine effects of pseudo-homophony. (This is going to be THE hit of 2017.) Oh, and it sure would be nice to save those results in tables.
+
+```{r}
+# create a table with subject mean RTs for pseudohomophones
+pseudohomophone_rt <- lex_data %>% filter(!is.na(rt)) %>% filter(type == "pseudohomophone") %>%
+  group_by(id) %>% summarise(ph_rt = mean(rt))
+
+# create a table with subject mean RTs for nonwords
+nonword_rt <- lex_data %>% filter(!is.na(rt)) %>% filter(type == "nonword") %>%
+  group_by(id) %>% summarise(nw_rt = mean(rt))
+
+# create a table with subject mean error rates for pseudohomophones
+pseudohomophone_err <- lex_data %>% filter(type == "pseudohomophone") %>%
+  group_by(id) %>% summarise(ph_err = mean(err))
+
+# create a table with subject mean error rates for pseudohomophones
+nonword_err <- lex_data %>% filter(type == "nonword") %>%
+  group_by(id) %>% summarise(nw_err = mean(err))
+
+```
+
+Remember how we had too many columns before? Well, now we have too many tables. The last thing I have to teach you (until next week, at least) is how to combine these tables using one of the join functions. Don't think about goodbyes. Just enjoy this beautiful code. (Okay, one annoying thing is that you cannot join more than two tables at once. Maybe someday the package will be updated to support this functionality. In my dreams.)
+
+```{r}
+# combine tables using full_join
+both_pseudohomophones = full_join(pseudohomophone_rt, pseudohomophone_err)
+both_nonwords = full_join(nonword_rt, nonword_err)
+pseudohomophone_effects = full_join(both_pseudohomophones, both_nonwords)
+
+# use rm to declutter the Global Environment (top right)
+rm(pseudohomophone_rt, pseudohomophone_err, both_pseudohomophones, nonword_rt, nonword_err, both_nonwords)
+
+# save our data sets to file (tab delimited, csv)
+write.table(lex_data, "lex_data.txt")
+write.csv(pseudohomophone_effects, "ph_effects.csv")
+
+```
+
+Glimpse that data! Hey, maybe you can try doing the same thing for imageability and wordlikeness. I'll leave a little code block here for you to give it a try:
+
+```{r}
+
+```
+
+Did it work? You did it, right? You did? That's great! Congratulations, you made it to the end of the tutorial! (And if you didn't do it... Well, congrats on exercising your free will, right? Wrong. Free will is an illusion. Go back and do it. I'll wait...)
