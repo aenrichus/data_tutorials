@@ -1,0 +1,198 @@
+---
+title: "Getting Good at ggplot2"
+author: "Henry Wolf VII"
+date: "29 March 2017"
+output: html_notebook
+---
+
+The first we need to install and load the packages. You can install packages in R Studio by going to *Tools -> Install Packages...* in the menu bar. You can also install them in code (see below).
+
+```{r}
+# install.packages("ggplot2")
+library(ggplot2)
+
+```
+
+Great. Now we have ggplot2 loaded. (Let's just call it ggplot from now on.) Hey! This sounds a lot like what we did last week. No harm in refreshing. (Fine. I copied and pasted the line above. You should be doing that, too. It can speed up your workflow sometimes.) Don't worry, you're about to learn the good stuff. Anyway, let's load our beautifully cleaned data from last week.
+
+```{r}
+# read in the data files
+lex_data <- read.delim("lex_data.txt", sep = " ")  # for a space-delimited file
+ph_effects <- read.csv("ph_effects.csv")
+
+```
+
+Did you try to glimpse at the data yet? Ha! That isn't going to work unless you load the dplyr package. These packages work great together, but this tutorial is (for the most part) going to stick to base R and ggplot functions. Use the head or View functions (or just click on it in the Global Environment at the top right) to take a look at the data. We have a weird extra column in the pseudohomophone effects file. Let's obliterate it. Subject should also be a factor. We can fix that, too.
+
+```{r}
+# drop the unnecessary column
+ph_effects$X <- NULL
+
+# change id to a factor
+lex_data$id <- as.factor(lex_data$id)
+
+```
+
+What's that? You're just here for the plots? If you're going to be like that, you can make some plots in base R.
+
+```{r}
+# make a plot of pseudohomophone error rates
+plot(ph_effects$ph_err)
+
+# make a plot of pseudohomophone and nonword RTs
+plot(x = ph_effects$ph_rt, y = ph_effects$nw_rt)
+
+```
+
+Pretty, right? Wrong! (Are you high?) It's all black and white. The scales are not even. There is no title. Worthless axis labels. Data points are overlapping. (And there are only 30 of them.) Did I even say I wanted scatterplots? No, I don't think that I did.
+
+Friends, I can tell you that there is a better way. That way is the Graphics of Grammar (wait, strike that, reverse it). That's what the "gg" stands for, in case you haven't figured that out yet. Let's start with a simple histogram.
+
+```{r}
+# save the base of the plot
+ph_error_plot <- ggplot(ph_effects, aes(ph_err))
+
+# show the data as a histogram
+ph_error_plot + geom_histogram()
+
+```
+
+Well, at least it isn't a scatterplot anymore. Also, it isn't sideways, so that's a plus. It's pretty easy to see that some jerk was just answering randomly. Good to know, but I wouldn't even publish this plot on my blog. Let's clean it up.
+
+```{r}
+# make a (somewhat) better looking histogram
+ph_error_plot + 
+  geom_histogram(binwidth = 0.02) + 
+  coord_cartesian(xlim = c(0, 0.3)) + 
+  labs(title = "Pseudohomophone Errors", x = "Error Rate", y = "Count") + 
+  theme_minimal() + theme(text = element_text(size = 16, color = "dark blue"))
+
+```
+
+Not exactly a normal distribution, but it sure looks better. Let's go through what we did. First, we chose a bin width for the histogram. We could have chosen the number of bins instead, it is up to you. We set the limits on the x-axis to between 0 and 0.3 to hide the outlier (not the Malcolm Gladwell kind). We changed the title and the labels for the axes so that I am not the only person who knows what they mean. We used the minimal theme, because that gray background is so 2016. But it still wasn't perfect, so we changed the text size and color (Go Huskies!).
+
+In ggplot, each plot is built in layers. This makes it really easy to change the data and get the same type of plot. (It also makes it really easy to make small changes to get your plots to look just the way you like them by adding another layer.) Why don't you try making a histogram of the nonword error rates below? That is a rhetorical question. Get to it.
+
+```{r}
+# save the base of the plot
+nw_error_plot <- ggplot(ph_effects, aes(nw_err))
+
+# do a barrel roll, er, I mean, make a nice looking histogram
+nw_error_plot + geom_histogram()
+
+```
+
+Holy skewed data, Batman! Well, that happens with error rates. Let's turn our attention to the RTs. We have the summarized data, but we lost a lot of information in calculating the means. Maybe the range of a participant is important as well. Praise Eris, ggplot has even more ways to plot two dimensional data. How about some box plots?
+
+```{r}
+# Let's get this plot started
+rt_plot <- ggplot(lex_data, aes(x = id, y = rt, group = id))
+
+# make a boxplot for each participant
+rt_plot + geom_boxplot()
+
+```
+
+Neat. (In the cool sense, not in the clean sense.) It looks like there is some variability between participants, which might be a good thing, depending on what you intended. Let's make this one look even neater using those nifty violin plots.
+
+```{r}
+# make a violin plot for each participant
+rt_plot + 
+  geom_violin(aes(color = id)) + 
+  ylim(5.5, 8) + 
+  labs(title = "Lexical Decision RTs", x = "Subject", y = "Log RT") + 
+  theme_bw() + theme(text = element_text(size = 16, color = "dark blue"))
+
+```
+
+What is this garbage? We were doing almost the same thing as before there is just too much overlap and a pretty useless legend. I just wanted to make it a little more colorful. Make it go away!
+
+```{r}
+# make a violin plot for each participant that isn't fugly
+rt_plot + 
+  geom_violin(aes(color = id)) + 
+  ylim(5.5, 8) + 
+  scale_x_discrete(labels = c(1:30)) + 
+  labs(title = "Lexical Decision RTs", x = "Subject", y = "Log RT") + 
+  theme_classic() + 
+  theme(text = element_text(size = 16, color = "dark blue"), legend.position="none")
+
+```
+
+That sure looks a lot cleaner to me. But these are all of the RTs. What if I just want to look at pseudohomophone RTs? Too bad. Here's the thing. In order to do that, you need to combine your dplyr skills with your ggplot skills. Since some of you might not have bothered to work through the dplyr tutorials, I am not going to go into too much depth on this, but here is an example that the overachievers can work from. Essentially, you want to filter your data before starting the plot. Check it.
+
+```{r}
+# load dplyr
+library(dplyr)
+
+# filter before starting the plot
+rt_plot <- lex_data %>% filter(type == "pseudohomophone") %>% 
+  ggplot(., aes(x = id, y = rt, group = id))
+
+# make violin plots for pseudohomophone RTs
+rt_plot + 
+  geom_violin(aes(color = id)) + 
+  ylim(5.5, 8) + 
+  scale_x_discrete(labels = c(1:30)) + 
+  labs(title = "Lexical Decision RTs", x = "Subject", y = "Log RT") + 
+  theme_light() + 
+  theme(text = element_text(size = 16, color = "dark blue"), legend.position="none")
+
+
+```
+
+B-E-A-Utiful. Just a few more things left to do. First, maybe we actually do want a scatter plot when comparing two variables (like RT and error rate.) You've got the idea already, right? I knew you had it in you. Just in case, here you go.
+
+```{r}
+# save the base of the plot
+ph_rtxerr <- ggplot(ph_effects, aes(ph_rt, ph_err))
+
+# make a scatterplot with a regression line
+ph_rtxerr + geom_point() + geom_smooth(method = "lm")
+
+
+```
+
+I can tell that faster participants are making fewer errors, in general, but what about getting this published for the web? FiveThirtyEight has some pretty nice plots. What about copying their style when sharing with the general public? See, it can be a lot of work getting everything to look just right. Take a look at the theme file. It creates a new function that you can use on just about any plot. Edit the function and you can edit all of the plots you are going to make going forward. Useful if you want a unified style, but a bit beyond the scope of this tutorial. 
+
+```{r}
+# load necessary packages and theme file
+# install.packages(c("RColorBrewer","scales"))
+library(scales); library(grid); library(RColorBrewer)
+source("theme_538.R")
+
+# plot with the theme added
+ph_rtxerr + geom_point() + geom_smooth(method = "lm") + fte_theme()
+
+```
+
+It is certainly modern. What does our histogram look like with the theme added?
+
+```{r}
+ph_error_plot + geom_histogram() + fte_theme()
+
+ph_error_plot + geom_dotplot() + fte_theme()
+
+ph_error_plot + geom_density() + fte_theme()
+
+```
+
+Surprise! Three different ways to plot this type of data. I like the dot plot, personally. Is this theme perfect for all of your needs? Probably not. (Certainly not.) Work it. Change it. Twist it. Remix it. (Is that a song? I don't even know.)
+
+Alrighty then, I have been talking (well, typing) a whole lot. Time for you to give it another try. Let's back up so that you can clean this graph up a bit. Take a look at the cheat sheet and try an entirely new type of plot, if you are feeling ambitious.
+
+```{r}
+# choose your own adventure plot
+ph_rtxerr + geom_point()
+
+```
+
+I like your style. That one is a keeper. Let's save it and be done with this.
+
+```{r}
+# save the last plot
+ggsave("cool_plot.png", width = 7, height = 7)
+
+```
+
+Piece of cake! (Ice cream cake, preferably. I'm waiting.) There you have it, folks. You learned the entire grammar of graphics. A new language. You speak (well, type) it fluently now. Can you feel it? No. Well, sorry! An entire course could be taught on ggplot. Look forward to "Getting gooder at ggplot2" (maybe, no promises). 

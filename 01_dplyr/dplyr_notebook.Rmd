@@ -2,8 +2,9 @@
 title: "Dealing with Data in dplyr"
 author: "Henry Wolf VII"
 date: "22 March 2017"
-output: html_document
+output: html_notebook
 ---
+
 
 The first we need to install and load the packages. You can install packages in R Studio by going to *Tools -> Install Packages...* in the menu bar. You can also install them in code (see below).
 
@@ -160,7 +161,7 @@ pseudohomophone_effects = full_join(both_pseudohomophones, both_nonwords)
 # use rm to declutter the Global Environment (top right)
 rm(pseudohomophone_rt, pseudohomophone_err, both_pseudohomophones, nonword_rt, nonword_err, both_nonwords)
 
-# save our data sets to file (tab delimited, csv)
+# save our data sets to file (space-delimited, csv)
 write.table(lex_data, "lex_data.txt")
 write.csv(pseudohomophone_effects, "ph_effects.csv")
 
@@ -169,6 +170,7 @@ write.csv(pseudohomophone_effects, "ph_effects.csv")
 Glimpse that data! Hey, maybe you can try doing the same thing for imageability and wordlikeness. I'll leave a little code block here for you to give it a try:
 
 ```{r}
+# you can do anything with Zombo.com
 
 ```
 
